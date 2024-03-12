@@ -1,0 +1,13 @@
+diff --git a/sdl2-sys/SDL_image/CMakeLists.txt b/sdl2-sys/SDL_image/CMakeLists.txt
+index 65a8811d24ffbd3aae1db84bbc69f72aae5dbf4c..11780c77d2145bdd9902c344592a060490da07c8 100644
+--- a/sdl2-sys/SDL_image/CMakeLists.txt
++++ b/sdl2-sys/SDL_image/CMakeLists.txt
+@@ -57,7 +57,7 @@ include(CMakePackageConfigHelpers)
+ include(GNUInstallDirs)
+ 
+ option(CMAKE_POSITION_INDEPENDENT_CODE "Build static libraries with -fPIC" ON)
+-option(BUILD_SHARED_LIBS "Build the library as a shared library" ON)
++option(BUILD_SHARED_LIBS "Build the library as a shared library" ${SDL_SHARED})
+ 
+ cmake_dependent_option(SDL2IMAGE_INSTALL "Enable SDL2_image install target" ${SDL2IMAGE_ROOTPROJECT} "${sdl2image_install_enableable}" OFF)
+ option(SDL2IMAGE_DEPS_SHARED "Load dependencies dynamically" ON)

@@ -1,0 +1,156 @@
+diff --git a/sdl2-sys/SDL_gfx/cmake/modules/FindSDL2.cmake b/sdl2-sys/SDL_gfx/cmake/modules/FindSDL2.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..3218b9b199749b479871079b641879cc3878eb9f
+--- /dev/null
++++ b/sdl2-sys/SDL_gfx/cmake/modules/FindSDL2.cmake
+@@ -0,0 +1,91 @@
++# - Find SDL2 library and headers
++#
++# Find module for SDL 2.0 (http://www.libsdl.org/).
++# It defines the following variables:
++#  SDL2_INCLUDE_DIRS - The location of the headers, e.g., SDL.h.
++#  SDL2_LIBRARIES - The libraries to link against to use SDL2.
++#  SDL2_FOUND - If false, do not try to use SDL2.
++#  SDL2_VERSION_STRING - Human-readable string containing the version of SDL2.
++#
++# This module responds to the the flag:
++#  SDL2_BUILDING_LIBRARY
++#    If this is defined, then no SDL2_main will be linked in because
++#    only applications need main().
++#    Otherwise, it is assumed you are building an application and this
++#    module will attempt to locate and set the the proper link flags
++#    as part of the returned SDL2_LIBRARIES variable.
++#
++# Also defined, but not for general use are:
++#   SDL2_INCLUDE_DIR - The directory that contains SDL.h.
++#   SDL2_LIBRARY - The location of the SDL2 library.
++#   SDL2MAIN_LIBRARY - The location of the SDL2main library.
++#
++
++#=============================================================================
++# Copyright 2013 Benjamin Eikel
++#
++# Distributed under the OSI-approved BSD License (the "License");
++# see accompanying file Copyright.txt for details.
++#
++# This software is distributed WITHOUT ANY WARRANTY; without even the
++# implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++# See the License for more information.
++#=============================================================================
++# (To distribute this file outside of CMake, substitute the full
++#  License text for the above reference.)
++
++find_package(PkgConfig QUIET)
++pkg_check_modules(PC_SDL2 QUIET sdl2)
++
++find_path(SDL2_INCLUDE_DIR
++  NAMES SDL.h
++  HINTS
++    ${PC_SDL2_INCLUDEDIR}
++    ${PC_SDL2_INCLUDE_DIRS}
++  PATH_SUFFIXES SDL2
++)
++
++find_library(SDL2_LIBRARY
++  NAMES SDL2 SDL2-static
++  HINTS
++    ${PC_SDL2_LIBDIR}
++    ${PC_SDL2_LIBRARY_DIRS}
++  PATH_SUFFIXES x64 x86
++)
++
++if(NOT SDL2_BUILDING_LIBRARY)
++  find_library(SDL2MAIN_LIBRARY
++    NAMES SDL2main
++    HINTS
++      ${PC_SDL2_LIBDIR}
++      ${PC_SDL2_LIBRARY_DIRS}
++    PATH_SUFFIXES x64 x86
++  )
++endif()
++
++if(SDL2_INCLUDE_DIR AND EXISTS "${SDL2_INCLUDE_DIR}/SDL_version.h")
++  file(STRINGS "${SDL2_INCLUDE_DIR}/SDL_version.h" SDL2_VERSION_MAJOR_LINE REGEX "^#define[ \t]+SDL_MAJOR_VERSION[ \t]+[0-9]+$")
++  file(STRINGS "${SDL2_INCLUDE_DIR}/SDL_version.h" SDL2_VERSION_MINOR_LINE REGEX "^#define[ \t]+SDL_MINOR_VERSION[ \t]+[0-9]+$")
++  file(STRINGS "${SDL2_INCLUDE_DIR}/SDL_version.h" SDL2_VERSION_PATCH_LINE REGEX "^#define[ \t]+SDL_PATCHLEVEL[ \t]+[0-9]+$")
++  string(REGEX REPLACE "^#define[ \t]+SDL_MAJOR_VERSION[ \t]+([0-9]+)$" "\\1" SDL2_VERSION_MAJOR "${SDL2_VERSION_MAJOR_LINE}")
++  string(REGEX REPLACE "^#define[ \t]+SDL_MINOR_VERSION[ \t]+([0-9]+)$" "\\1" SDL2_VERSION_MINOR "${SDL2_VERSION_MINOR_LINE}")
++  string(REGEX REPLACE "^#define[ \t]+SDL_PATCHLEVEL[ \t]+([0-9]+)$" "\\1" SDL2_VERSION_PATCH "${SDL2_VERSION_PATCH_LINE}")
++  set(SDL2_VERSION_STRING ${SDL2_VERSION_MAJOR}.${SDL2_VERSION_MINOR}.${SDL2_VERSION_PATCH})
++  unset(SDL2_VERSION_MAJOR_LINE)
++  unset(SDL2_VERSION_MINOR_LINE)
++  unset(SDL2_VERSION_PATCH_LINE)
++  unset(SDL2_VERSION_MAJOR)
++  unset(SDL2_VERSION_MINOR)
++  unset(SDL2_VERSION_PATCH)
++endif()
++
++set(SDL2_INCLUDE_DIRS ${SDL2_INCLUDE_DIR})
++set(SDL2_LIBRARIES ${SDL2MAIN_LIBRARY} ${SDL2_LIBRARY})
++
++include(FindPackageHandleStandardArgs)
++
++find_package_handle_standard_args(SDL2
++                                  REQUIRED_VARS SDL2_INCLUDE_DIR SDL2_LIBRARY
++                                  VERSION_VAR SDL2_VERSION_STRING)
++
++mark_as_advanced(SDL2_INCLUDE_DIR SDL2_LIBRARY)
+\ No newline at end of file
+diff --git a/sdl2-sys/SDL_gfx/CMakeLists.txt b/sdl2-sys/SDL_gfx/CMakeLists.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb0219c7c6b003c352d5ab506b9cf1d78de6367a
+--- /dev/null
++++ b/sdl2-sys/SDL_gfx/CMakeLists.txt
+@@ -0,0 +1,38 @@
++cmake_minimum_required(VERSION 3.16)
++
++project(SDL2_gfx
++    LANGUAGES C
++    VERSION 1.0.4
++)
++
++set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules")
++find_package (SDL2 REQUIRED)
++
++#set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
++#set(prefix "${CMAKE_INSTALL_PREFIX}")
++#set(includedir "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
++
++option(BUILD_SHARED_LIBS "Build the library as a shared library" ${SDL_SHARED})
++
++include_directories (
++    "${SDL2_INCLUDE_DIR}/SDL2"
++    ${CMAKE_SOURCE_DIR}
++)
++
++file(GLOB SOURCE_FILES ${CMAKE_SOURCE_DIR}/*.c)
++#file(GLOB INCLUDE_FILES ${CMAKE_SOURCE_DIR}/*.h)
++
++add_library (SDL2_gfx
++    ${SOURCE_FILES}
++)
++
++install(
++    TARGETS SDL2_gfx
++    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT devel
++    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT library
++    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT library
++)
++install(FILES
++    ${INCLUDE_FILES}
++    DESTINATION "${SDL2_INCLUDE_DIR}/SDL2" COMPONENT devel
++)
+\ No newline at end of file
+diff --git a/sdl2-sys/SDL_gfx/SDL2_gfxPrimitives.c b/sdl2-sys/SDL_gfx/SDL2_gfxPrimitives.c
+index 60a744c2f275cb58feaa712ce1cdd2bd394b3097..48224a884bbdf9c5a63d6a87c59720ab874520d6 100644
+--- a/sdl2-sys/SDL_gfx/SDL2_gfxPrimitives.c
++++ b/sdl2-sys/SDL_gfx/SDL2_gfxPrimitives.c
+@@ -1757,7 +1757,7 @@ int filledCircleRGBA(SDL_Renderer * renderer, Sint16 x, Sint16 y, Sint16 rad, Ui
+ /* ----- AA Ellipse */
+ 
+ /* Windows targets do not have lrint, so provide a local inline version */
+-#if defined(_MSC_VER)
++#if defined(_MSC_VER) && _MSC_VER < 1300
+ /* Detect 64bit and use intrinsic version */
+ #ifdef _M_X64
+ #include <emmintrin.h>

@@ -32,14 +32,32 @@ macro_rules! add_msvc_includes_to_bindings {
     };
 }
 
-fn init_submodule(sdl_path: &Path) {
-    if !sdl_path.join("CMakeLists.txt").exists() {
+fn init_submodule(sdl_module: &str, path: &Path) {
+    Command::new("git")
+        .args(&["submodule", "update", "--init", "--recursive", sdl_module])
+        .current_dir(path.join(".."))
+        .status()
+        .expect("Git is needed to retrieve the SDL source files");
+
+    let patch_path = path.join(format!("../{}.patch", sdl_module));
+    println!("cargo:warning=PATCH PATH {}", patch_path.display());
+    if patch_path.exists() {
+        println!("cargo:warning=APPLYING PATCH PATH {}", patch_path.display());
         Command::new("git")
-            .args(&["submodule", "update", "--init"])
-            .current_dir(sdl_path.clone())
+            .args(&[
+                "apply",
+                patch_path
+                    .to_str()
+                    .expect("Failed to convert SDL patch path"),
+            ])
+            .current_dir(path.join(".."))
             .status()
-            .expect("Git is needed to retrieve the SDL source files");
+            .expect("Git is needed to apply the SDL patch");
     }
+}
+
+fn patch_submodule(sdl_path: &Path) {
+    if !sdl_path.join("CMakeLists.txt").exists() {}
 }
 
 #[cfg(feature = "use-pkgconfig")]
@@ -92,7 +110,11 @@ fn get_vcpkg_config() {
 
 // compile a shared or static lib depending on the feature
 #[cfg(feature = "bundled")]
-fn compile_sdl2(sdl2_build_path: &Path, target_os: &str) -> PathBuf {
+fn compile_sdl2(
+    sdl2_build_path: &Path,
+    target_os: &str,
+    sdl2_compiled_path: Option<&PathBuf>,
+) -> PathBuf {
     let mut cfg = cmake::Config::new(sdl2_build_path);
     if let Ok(profile) = env::var("SDL2_BUILD_PROFILE") {
         cfg.profile(&profile);
@@ -101,6 +123,16 @@ fn compile_sdl2(sdl2_build_path: &Path, target_os: &str) -> PathBuf {
         cfg.profile("Release");
         cfg.define("CMAKE_CONFIGURATION_TYPES", "Release");
     }
+
+    if let Some(sdl2_compiled_path) = sdl2_compiled_path {
+        cfg.define(
+            "SDL2_INCLUDE_DIR",
+            sdl2_compiled_path.join("include").as_path(),
+        );
+    }
+
+    cfg.define("SDL2MIXER_VENDORED", "ON");
+    cfg.define("SDL2TTF_VENDORED", "ON");
 
     // Allow specifying custom toolchain specifically for SDL2.
     if let Ok(toolchain) = env::var("SDL2_TOOLCHAIN") {
@@ -251,23 +283,21 @@ fn link_sdl2(target_os: &str) {
                 println!("cargo:rustc-link-lib=SDL2");
             }
 
-            // bundled not support the other feature
-            if !cfg!(feature = "bundled") {
-                if cfg!(feature = "gfx") {
-                    println!("cargo:rustc-link-lib=SDL2_gfx");
-                }
+            if cfg!(feature = "gfx") {
+                println!("cargo:rustc-link-lib=SDL2_gfx");
+            }
 
-                if cfg!(feature = "mixer") {
-                    println!("cargo:rustc-link-lib=SDL2_mixer");
-                }
+            if cfg!(feature = "mixer") {
+                println!("cargo:rustc-link-lib=SDL2_mixer-static");
+            }
 
-                if cfg!(feature = "image") {
-                    println!("cargo:rustc-link-lib=SDL2_image");
-                }
+            if cfg!(feature = "image") {
+                println!("cargo:rustc-link-lib=SDL2_image-static");
+            }
 
-                if cfg!(feature = "ttf") {
-                    println!("cargo:rustc-link-lib=SDL2_ttf");
-                }
+            if cfg!(feature = "ttf") {
+                println!("cargo:rustc-link-lib=freetype");
+                println!("cargo:rustc-link-lib=SDL2_ttf");
             }
         }
 
@@ -443,7 +473,7 @@ fn copy_library_file(src_path: &Path, target_path: &Path) {
     }
 }
 
-fn copy_dynamic_libraries(sdl2_compiled_path: &PathBuf, target_os: &str) {
+fn copy_dynamic_libraries(sdl2_dll_name: &str, sdl2_compiled_path: &PathBuf, target_os: &str) {
     let target_path = find_cargo_target_dir();
 
     // Windows binaries do not embed library search paths, so successfully
@@ -453,7 +483,6 @@ fn copy_dynamic_libraries(sdl2_compiled_path: &PathBuf, target_os: &str) {
     // copy sdl2.dll out of its build tree and down to the top level cargo
     // binary output directory.
     if target_os.contains("windows") {
-        let sdl2_dll_name = "SDL2.dll";
         let sdl2_bin_path = sdl2_compiled_path.join("bin");
         let src_dll_path = sdl2_bin_path.join(sdl2_dll_name);
 
@@ -491,14 +520,16 @@ fn main() {
     let target = env::var("TARGET").expect("Cargo build scripts always have TARGET");
     let host = env::var("HOST").expect("Cargo build scripts always have HOST");
     let target_os = get_os_from_triple(target.as_str()).unwrap();
+    let mut include_paths: Vec<String> = vec![];
 
-    let sdl2_source_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("SDL");
-    init_submodule(sdl2_source_path.as_path());
+    let sdl2sys_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let sdl2_source_path = sdl2sys_path.join("SDL");
+    init_submodule("SDL", sdl2_source_path.as_path());
 
     let sdl2_compiled_path: PathBuf;
     #[cfg(feature = "bundled")]
     {
-        sdl2_compiled_path = compile_sdl2(sdl2_source_path.as_path(), target_os);
+        sdl2_compiled_path = compile_sdl2(sdl2_source_path.as_path(), target_os, None);
 
         println!(
             "cargo:rustc-link-search={}",
@@ -508,6 +539,12 @@ fn main() {
             "cargo:rustc-link-search={}",
             sdl2_compiled_path.join("lib").display()
         );
+
+        // Android builds shared libhidapi.so even for static builds.
+        #[cfg(any(not(feature = "static-link"), target_os = "android"))]
+        {
+            copy_dynamic_libraries("SDL2.dll", &sdl2_compiled_path, target_os);
+        }
     }
 
     let sdl2_includes = sdl2_source_path
@@ -515,14 +552,71 @@ fn main() {
         .to_str()
         .unwrap()
         .to_string();
+    include_paths.push(sdl2_includes);
+
+    #[cfg(feature = "bundled")]
+    {
+        let mut sdl2_libs = vec![];
+        #[cfg(feature = "gfx")]
+        {
+            sdl2_libs.push("gfx");
+        }
+        #[cfg(feature = "mixer")]
+        {
+            sdl2_libs.push("mixer");
+        }
+        #[cfg(feature = "image")]
+        {
+            sdl2_libs.push("image");
+        }
+        #[cfg(feature = "ttf")]
+        {
+            sdl2_libs.push("ttf");
+        }
+
+        for sdl2_lib in sdl2_libs {
+            let sdl2_lib_source_path = sdl2sys_path.join(format!("SDL_{}", sdl2_lib));
+            init_submodule(
+                format!("SDL_{}", sdl2_lib).as_str(),
+                sdl2_lib_source_path.as_path(),
+            );
+
+            let sdl2_lib_compiled_path = compile_sdl2(
+                sdl2_lib_source_path.as_path(),
+                target_os,
+                Some(&sdl2_compiled_path),
+            );
+
+            println!(
+                "cargo:rustc-link-search={}",
+                sdl2_lib_compiled_path.join("lib64").display()
+            );
+            println!(
+                "cargo:rustc-link-search={}",
+                sdl2_lib_compiled_path.join("lib").display()
+            );
+
+            // Android builds shared libhidapi.so even for static builds.
+            #[cfg(any(not(feature = "static-link"), target_os = "android"))]
+            {
+                copy_dynamic_libraries(
+                    format!("SDL2_{}.dll", sdl2_lib).as_str(),
+                    &sdl2_lib_compiled_path,
+                    target_os,
+                );
+            }
+
+            let sdl2_lib_includes = sdl2_lib_source_path
+                .join("include")
+                .to_str()
+                .unwrap()
+                .to_string();
+            include_paths.push(sdl2_lib_includes);
+        }
+    }
 
     #[cfg(feature = "bindgen")]
     {
-        let include_paths: Vec<String>;
-        #[cfg(feature = "bundled")]
-        {
-            include_paths = vec![sdl2_includes];
-        }
         #[cfg(not(feature = "bundled"))]
         {
             include_paths = compute_include_paths(sdl2_includes)
@@ -534,19 +628,12 @@ fn main() {
     #[cfg(not(feature = "bindgen"))]
     {
         copy_pregenerated_bindings();
-        println!("cargo:include={}", sdl2_includes);
+        for include in include_paths {
+            println!("cargo:include={}", include);
+        }
     }
 
     link_sdl2(target_os);
-
-    // Android builds shared libhidapi.so even for static builds.
-    #[cfg(all(
-        feature = "bundled",
-        any(not(feature = "static-link"), target_os = "android")
-    ))]
-    {
-        copy_dynamic_libraries(&sdl2_compiled_path, target_os);
-    }
 }
 
 #[cfg(not(feature = "bindgen"))]

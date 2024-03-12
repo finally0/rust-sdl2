@@ -1,0 +1,23 @@
+diff --git a/sdl2-sys/SDL_mixer/CMakeLists.txt b/sdl2-sys/SDL_mixer/CMakeLists.txt
+index dc37b28f69aaaad1d6b1555773f612a72b6ee274..9d7d7d3e439644cccf1ac674103648f12c7c1873 100644
+--- a/sdl2-sys/SDL_mixer/CMakeLists.txt
++++ b/sdl2-sys/SDL_mixer/CMakeLists.txt
+@@ -82,14 +82,16 @@ include(GNUInstallDirs)
+ include(PkgConfigHelper)
+ 
+ option(CMAKE_POSITION_INDEPENDENT_CODE "Build static libraries with -fPIC" ON)
+-option(BUILD_SHARED_LIBS "Build the library as a shared library" ON)
++option(BUILD_SHARED_LIBS "Build the library as a shared library" ${SDL_SHARED})
+ 
+ # Save BUILD_SHARED_LIBS variable as soon as possible
+ set(SDL2MIXER_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+ 
+ cmake_dependent_option(SDL2MIXER_INSTALL "Enable SDL2mixer install target" ${SDL2MIXER_ROOTPROJECT} "${sdl2mixer_install_enableable}" OFF)
+ option(SDL2MIXER_DEPS_SHARED "Default value for loading dependencies dynamically" ON)
+-option(SDL2MIXER_VENDORED "Use vendored third-party libraries" ${vendored_default})
++if(NOT DEFINED SDL2MIXER_VENDORED)
++  option(SDL2MIXER_VENDORED "Use vendored third-party libraries" ${vendored_default})
++endif()
+ 
+ option(SDL2MIXER_SAMPLES "Build the SDL2_mixer sample program(s)" ${SDL2MIXER_SAMPLES_DEFAULT})
+ cmake_dependent_option(SDL2MIXER_SAMPLES_INSTALL "Install the SDL2_mixer sample program(s)" OFF "SDL2MIXER_SAMPLES;SDL2MIXER_INSTALL" OFF)

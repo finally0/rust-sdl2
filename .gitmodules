@@ -1,3 +1,15 @@
 [submodule "sdl2-sys/SDL"]
 	path = sdl2-sys/SDL
 	url = https://github.com/libsdl-org/SDL
+[submodule "sdl2-sys/SDL_ttf"]
+	path = sdl2-sys/SDL_ttf
+	url = https://github.com/libsdl-org/SDL_ttf
+[submodule "sdl2-sys/SDL_mixer"]
+	path = sdl2-sys/SDL_mixer
+	url = https://github.com/libsdl-org/SDL_mixer
+[submodule "sdl2-sys/SDL_image"]
+	path = sdl2-sys/SDL_image
+	url = https://github.com/libsdl-org/SDL_image
+[submodule "sdl2-sys/SDL_gfx"]
+	path = sdl2-sys/SDL_gfx
+	url = https://github.com/ferzkopp/SDL2_gfx
